@@ -134,25 +134,53 @@ def write_output(path,data,force=False):
  p.write_bytes(data)
 def info():
  print('Standard Base64: A-Z a-z 0-9 + /\nBase64URL:       A-Z a-z 0-9 - _\n= is padding. Base64URL avoids URL-reserved + and /.\nBase64 is encoding, not encryption.')
+def pause():
+ input('\nPress Enter to return to menu...')
+
+def xor_menu():
+ while True:
+  print('\n=== XOR ANALYSIS ===\n[1] Single-byte XOR\n[2] Known repeating key\n[3] Wildcard key search\n[0] Back')
+  mode=input('\nChoice: ').strip()
+  if mode=='0': return
+  try:
+   v=input('Paste Base64 ciphertext: ').strip(); data=decode_base64(v)
+   if mode=='1': print_candidates([(s,k,[p]) for s,k,p in single_byte_xor_candidates(data)])
+   elif mode=='2': show_inspection(repeating_xor(data,input('Key: ').encode()))
+   elif mode=='3':
+    pat=input('Key pattern (? = unknown): '); cs=input('Charset [printable]: ').strip() or 'printable'
+    print_candidates(wildcard_xor_candidates([data],pat,cs))
+   else: print('Unknown choice. Choose 0-3.'); continue
+  except (ValueError,OSError) as e: print('Error:',e)
+  pause()
+
 def interactive():
- print('=== BASE64 PEEK ===\n[1] Decode / inspect Base64\n[2] Encode text\n[3] XOR analysis\n[4] JWT inspector\n[5] Other base encodings\n[6] Base64 info\n[0] Exit')
- c=input('\nChoice [1]: ').strip() or '1'
- if c=='0':return
- if c=='1':
-  v=input('Paste Base64/Base64URL value: ').strip(); raw=decode_base64(v); print('Detected      :',detect_base64_variant(v)); show_inspection(raw,True,True)
-  if looks_like_base64(raw) and input('Decoded data resembles Base64. Decode another layer? [y/N]: ').lower()=='y':
-   for n,x in enumerate(recursive_decode(v),1): print(f'\nLayer {n}:'); show_inspection(x)
- elif c=='2': print(encode_base64(input('Text: ').encode(),input('URL-safe? [y/N]: ').lower()=='y'))
- elif c=='3':
-  v=input('Paste Base64 ciphertext: '); data=decode_base64(v); mode=input('[1] Single-byte XOR [2] Known repeating key [3] Wildcard key: ').strip()
-  if mode=='1': print_candidates([(s,k,[p]) for s,k,p in single_byte_xor_candidates(data)])
-  elif mode=='2': show_inspection(repeating_xor(data,input('Key: ').encode()))
-  elif mode=='3':
-   pat=input('Key pattern (? = unknown): '); cs=input('Charset [printable]: ').strip() or 'printable'; print_candidates(wildcard_xor_candidates([data],pat,cs))
- elif c=='4': print(json.dumps(inspect_jwt(input('JWT: ')),indent=2,default=lambda x:x.decode(errors='replace') if isinstance(x,bytes) else str(x)))
- elif c=='5':
-  kind=input('Encoding [base16/base32/base32hex/base64/base85/ascii85]: ').strip(); op=input('[e]ncode/[d]ecode: ').lower(); val=input('Value: '); print(encode_other_base(val.encode(),kind) if op.startswith('e') else escaped(decode_other_base(val,kind)))
- elif c=='6': info()
+ while True:
+  print('\n=== BASE64 PEEK ===\n[1] Decode / inspect Base64\n[2] Encode text\n[3] XOR analysis\n[4] JWT inspector\n[5] Other base encodings\n[6] Base64 info\n[0] Exit')
+  choice=input('\nChoice [1]: ').strip() or '1'
+  if choice=='0': return
+  try:
+   if choice=='1':
+    v=input('Paste Base64/Base64URL value: ').strip(); raw=decode_base64(v)
+    print('Detected      :',detect_base64_variant(v)); show_inspection(raw,True,True)
+    if looks_like_base64(raw) and input('Decoded data resembles Base64. Decode another layer? [y/N]: ').lower()=='y':
+     for n,x in enumerate(recursive_decode(v),1): print(f'\nLayer {n}:'); show_inspection(x)
+   elif choice=='2':
+    text=input('Text: '); url=input('URL-safe? [y/N]: ').lower()=='y'; unpadded=input('Remove padding? [y/N]: ').lower()=='y'
+    print('Encoded:',encode_base64(text.encode(),url,not unpadded))
+   elif choice=='3':
+    xor_menu(); continue
+   elif choice=='4':
+    print(json.dumps(inspect_jwt(input('JWT: ')),indent=2,default=lambda x:x.decode(errors='replace') if isinstance(x,bytes) else str(x)))
+   elif choice=='5':
+    kind=input('Encoding [base16/base32/base32hex/base64/base85/ascii85]: ').strip()
+    op=input('[e]ncode/[d]ecode: ').lower(); val=input('Value: ')
+    print(encode_other_base(val.encode(),kind) if op.startswith('e') else escaped(decode_other_base(val,kind)))
+   elif choice=='6': info()
+   else:
+    print('Unknown choice. Choose 0-6.'); continue
+  except (ValueError,OSError) as e: print('Error:',e)
+  pause()
+
 def parser():
  p=argparse.ArgumentParser(description='Offline Base64/base-encoding inspector and XOR analysis helper')
  g=p.add_mutually_exclusive_group()
